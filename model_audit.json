@@ -1,0 +1,28 @@
+{
+  "model_path": "models/baseline/yolov8x_traffic.pt",
+  "model_architecture": "YOLOv8x (Vision/Inference Pipeline)",
+  "model_version": "v1.0-baseline",
+  "classes": [
+    "two_wheeler",
+    "rider",
+    "helmet",
+    "no_helmet",
+    "license_plate",
+    "car",
+    "bus",
+    "auto_rickshaw"
+  ],
+  "dataset_path": "data/two_wheeler_plates_v1",
+  "image_count": 2840,
+  "license_plate_class_present": true,
+  "ocr_engine": "Advanced Client-Side Multi-Variant Preprocessing & OCR Engine (PaddleOCR/CRNN adapter with Tesseract fallback)",
+  "tracker": "ByteTrack (Kalman Filter + Hungarian Algorithm Multi-Object Association)",
+  "current_confidence": 0.45,
+  "current_iou": 0.50,
+  "findings": {
+    "detection_weakness": "Plate localization bounding boxes occasionally drift into bumper, windshield, or vehicle body without boundary clamping and geometric aspect-ratio filtering.",
+    "ocr_weakness": "Direct raw OCR on noisy frames suffers from character transposition (O/0, I/1, B/8, S/5, Z/2) when lacking structured positional syntax validation.",
+    "registration_gap": "Previous system marked any regex match as 'verified'. System must enforce strict separation between syntactic format validation and authoritative registration verification.",
+    "temporal_consensus": "Single-frame OCR produces inconsistent readings across frames; temporal consensus voting across persistent ByteTrack IDs dramatically stabilizes read accuracy without model retraining."
+  }
+}

@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-Powered End-to-End Ranked Traffic Violation Enforcement and Review System with Computer Vision Evidence Annotation and Priority Scoring.">
+    <title>Traffic Safety Advisor | End-to-End Ranked Violation Review System</title>
+    
+    <!-- CSS Stylesheets -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/animations.css">
+
+    <style>
+        /* Embedded Toast and Quick Helpers */
+        .toast-popup {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            padding: 14px 22px;
+            border-radius: var(--radius-md);
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid var(--border-accent);
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5), var(--shadow-cyan-glow);
+            z-index: 9999;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+        }
+        .toast-popup.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .toast-success { border-color: var(--success-green); color: #34d399; }
+        .toast-warn { border-color: var(--warn-orange); color: #fbbf24; }
+        .toast-crit { border-color: var(--crit-red); color: #f87171; }
+    </style>
+</head>
+<body>
+
+    <!-- Top Command Header -->
+    <header class="app-header">
+        <div class="brand-section">
+            <div class="emblem-badge">🛡️</div>
+            <div class="brand-text">
+                <h1>
+                    TRAFFIC SAFETY ADVISOR 
+                    <span class="version-badge">v4.2 AI ENFORCEMENT</span>
+                </h1>
+                <p>Prioritized Traffic Violation Review &amp; E-Challan Dispatch System</p>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <div class="live-pill">
+                <span class="live-dot"></span>
+                <span>YOLOv8 + ByteTrack Live</span>
+            </div>
+
+            <button id="btnOpenFormula" class="btn btn-outline" title="Tune Priority Formula Weights">
+                ⚙️ Formula Weights
+            </button>
+            <button id="btnExportCSV" class="btn btn-outline" title="Export Prioritized Queue to CSV">
+                📥 Export CSV
+            </button>
+            <button id="btnPrintReport" class="btn btn-primary" title="Print Official Police Enforcement Dossier">
+                📄 Print Police Report
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-container">
+
+        <!-- Statistics Metric Cards (Requirement 7) -->
+        <section class="stats-grid" aria-label="Key Enforcement Metrics">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="stat-title">Videos Processed</span>
+                    <span class="stat-icon">📹</span>
+                </div>
+                <div class="stat-value">12</div>
+                <div class="stat-subtitle">Across 5 City Junctions</div>
+            </div>
+
+            <div class="stat-card crit">
+                <div class="stat-header">
+                    <span class="stat-title">Violations Detected</span>
+                    <span class="stat-icon">⚠️</span>
+                </div>
+                <div class="stat-value" id="statTotalViolations">137</div>
+                <div class="stat-subtitle">AI Multi-Class Detections</div>
+            </div>
+
+            <div class="stat-card warn">
+                <div class="stat-header">
+                    <span class="stat-title">Review Capacity</span>
+                    <span class="stat-icon">👮</span>
+                </div>
+                <div class="stat-value" id="statCapacity">30</div>
+                <div class="stat-subtitle">Officer Shift Capacity</div>
+            </div>
+
+            <div class="stat-card crit">
+                <div class="stat-header">
+                    <span class="stat-title">High Priority Cases</span>
+                    <span class="stat-icon">🔥</span>
+                </div>
+                <div class="stat-value" id="statCritical">18</div>
+                <div class="stat-subtitle">Priority Score &ge; 85.0</div>
+            </div>
+
+            <div class="stat-card purple">
+                <div class="stat-header">
+                    <span class="stat-title">Repeat Offenders</span>
+                    <span class="stat-icon">🔁</span>
+                </div>
+                <div class="stat-value" id="statRepeats">41</div>
+                <div class="stat-subtitle">Matched via ANPR / OCR</div>
+            </div>
+
+            <div class="stat-card succ">
+                <div class="stat-header">
+                    <span class="stat-title">Officer Reviewed</span>
+                    <span class="stat-icon">✅</span>
+                </div>
+                <div class="stat-value" id="statReviewed">0 / 30</div>
+                <div class="stat-subtitle">Pending Human Verification</div>
+            </div>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <nav class="view-tabs" aria-label="Main Navigation">
+            <button class="tab-btn active" data-tab="queue">
+                📋 Prioritized Review Queue
+            </button>
+            <button class="tab-btn" data-tab="studio">
+                📹 Live CCTV &amp; Upload Pipeline
+            </button>
+            <button class="tab-btn" data-tab="analytics">
+                📊 Violation Analytics &amp; Hotspots
+            </button>
+            <button class="tab-btn" data-tab="architecture">
+                🏗️ System Architecture
+            </button>
+        </nav>
+
+        <!-- TAB 1: PRIORITIZED REVIEW QUEUE (Main View) -->
+        <section id="panel-queue" class="view-panel">
+            
+            <!-- Toolbar & Filter Card -->
+            <div class="toolbar-card">
+                <div class="toolbar-row-top">
+                    <!-- Search Input -->
+                    <div class="search-box-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="searchInput" class="search-input" placeholder="Search license plate, case ID, owner, or vehicle..." aria-label="Search violations">
+                    </div>
+
+                    <!-- Filter Chips -->
+                    <div class="filter-chips-group">
+                        <button class="chip-btn active" data-violation="ALL">All Violations</button>
+                        <button class="chip-btn" data-violation="WRONG_WAY">🚗 Wrong Way</button>
+                        <button class="chip-btn" data-violation="NO_HELMET">🪖 No Helmet</button>
+                        <button class="chip-btn" data-violation="RED_LIGHT">🚦 Red Light</button>
+                        <button class="chip-btn" data-violation="MULTIPLE_RIDERS">👥 Multiple Riders</button>
+                    </div>
+                </div>
+
+                <!-- Secondary Status & Integrity Filter Chips -->
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center;">
+                    <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Review Criteria:</span>
+                    <button class="chip-btn active" data-criteria="ALL" style="font-size: 11px; padding: 3px 9px;">All Criteria</button>
+                    <button class="chip-btn" data-criteria="REPEAT" style="font-size: 11px; padding: 3px 9px;">🔁 Repeated Vehicles</button>
+                    <button class="chip-btn" data-criteria="VERIFIED" style="font-size: 11px; padding: 3px 9px;">🟢 Verified Registration</button>
+                    <button class="chip-btn" data-criteria="UNVERIFIED" style="font-size: 11px; padding: 3px 9px;">🟡 Unverified Plates</button>
+                    <button class="chip-btn" data-criteria="OCR_REVIEW" style="font-size: 11px; padding: 3px 9px;">🟠 OCR Review</button>
+                    <button class="chip-btn" data-criteria="HIGH_SEVERITY" style="font-size: 11px; padding: 3px 9px;">🔥 High Severity (&ge;85)</button>
+                </div>
+
+                <!-- Capacity Slider Strip (Core Problem Solver) -->
+                <div class="capacity-strip">
+                    <div class="capacity-info">
+                        <span style="font-weight: 700; font-size: 13px;">⚖️ Officer Capacity Cutoff:</span>
+                        <span style="font-size: 12px; color: var(--text-secondary);">
+                            Rank Top <strong><span id="capacityValText">30</span></strong> highest risk cases for officer manual verification
+                        </span>
+                    </div>
+                    <div class="capacity-slider-ctrl">
+                        <span style="font-size: 11px; color: var(--text-muted);">10</span>
+                        <input type="range" id="capacitySlider" min="10" max="60" value="30" step="5" aria-label="Adjust review capacity">
+                        <span style="font-size: 11px; color: var(--text-muted);">60</span>
+                        <span class="capacity-count-badge">Top 30 Queue</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Queue Table Container -->
+            <div class="queue-table-container">
+                <table class="queue-table" aria-label="Prioritized Traffic Violations Review Queue">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">Rank</th>
+                            <th style="width: 90px;">Case ID</th>
+                            <th>Violation Detected</th>
+                            <th>Vehicle &amp; Plate</th>
+                            <th>Severity</th>
+                            <th>Repeat History</th>
+                            <th>Priority Score</th>
+                            <th>Review Status</th>
+                            <th style="text-align: right; width: 110px;">Evidence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queueTableBody">
+                        <!-- Populated dynamically by app.js -->
+                    </tbody>
+                </table>
+            </div>
+
+        </section>
+
+        <!-- TAB 2: LIVE CCTV & MEDIA UPLOAD STUDIO -->
+        <section id="panel-studio" class="view-panel" style="display: none;">
+            <div class="studio-grid">
+                <!-- Left: Video / Canvas Monitor -->
+                <div class="cctv-monitor-card">
+                    <div class="cctv-canvas-wrap">
+                        <canvas id="studioCctvCanvas" width="1280" height="720"></canvas>
+                    </div>
+                    <div class="camera-controls-strip">
+                        <div class="camera-select-buttons">
+                            <button class="btn btn-primary" data-cam="0">CAM-04: Main Ave</button>
+                            <button class="btn btn-outline" data-cam="1">CAM-08: Flyover</button>
+                            <button class="btn btn-outline" data-cam="2">CAM-12: Metro 5th</button>
+                            <button class="btn btn-outline" data-cam="3">CAM-02: Gandhi Sq</button>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Click feeds to switch active CCTV nodes
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Custom Ingestion & Stream Diagnostics -->
+                <div style="display: flex; flex-direction: column; gap: 18px;">
+                    <div class="inspector-section">
+                        <div class="section-label">Upload Custom Traffic Video / Image</div>
+                        <div class="upload-dropzone" id="customUploadDropzone">
+                            <div style="font-size: 32px; margin-bottom: 8px;">📤</div>
+                            <div style="font-weight: 700; font-size: 13px;">Drop Traffic Video or Image Here</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Supports MP4, WEBM, JPG, PNG</div>
+                            <button class="btn btn-outline" style="margin-top: 12px; font-size: 11px;">Browse Computer</button>
+                            <input type="file" id="customFileInput" accept="video/*,image/*" style="display: none;">
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+                            Uploaded media will be analyzed with client-side detection simulation and ranked into the Priority Queue.
+                        </div>
+                    </div>
+
+                    <div class="inspector-section">
+                        <div class="section-label">Inference Telemetry Pipeline</div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Model Engine</span>
+                            <span class="mono" style="color: var(--cyan-primary);">YOLOv8x-Traffic</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Tracker Backbone</span>
+                            <span class="mono">ByteTrack (Kalman Filter)</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Frame Resolution</span>
+                            <span class="mono">1920 x 1080 @ 30 FPS</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Inference Latency</span>
+                            <span class="mono" style="color: var(--success-green);">18.4 ms / frame</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">ANPR Engine</span>
+                            <span class="mono">PaddleOCR + CRNN</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: ANALYTICS & HOTSPOTS -->
+        <section id="panel-analytics" class="view-panel" style="display: none;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px;">
+                
+                <!-- Violation Breakdown Chart -->
+                <div class="inspector-section" style="padding: 20px;">
+                    <div class="section-label">Violation Distribution by Type</div>
+                    <div style="margin: 20px 0;">
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                                <span>🚗 Wrong Way Driving</span>
+                                <span class="mono" style="font-weight: bold;">38 cases (28%)</span>
+                            </div>
+                            <div style="height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden;">
+                                <div style="width: 28%; height: 100%; background: var(--crit-red);"></div>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                                <span>🪖 No Helmet</span>
+                                <span class="mono" style="font-weight: bold;">45 cases (33%)</span>
+                            </div>
+                            <div style="height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden;">
+                                <div style="width: 33%; height: 100%; background: #eab308;"></div>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                                <span>🚦 Red Light Violation</span>
+                                <span class="mono" style="font-weight: bold;">32 cases (23%)</span>
+                            </div>
+                            <div style="height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden;">
+                                <div style="width: 23%; height: 100%; background: var(--warn-orange);"></div>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                                <span>👥 Multiple Riders (Triple Riding)</span>
+                                <span class="mono" style="font-weight: bold;">22 cases (16%)</span>
+                            </div>
+                            <div style="height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden;">
+                                <div style="width: 16%; height: 100%; background: var(--purple-repeat);"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Junction Hotspots -->
+                <div class="inspector-section" style="padding: 20px;">
+                    <div class="section-label">High-Risk Junction Camera Hotspots</div>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-glass); color: var(--text-muted);">
+                                <th style="text-align: left; padding: 6px 0;">Camera Node</th>
+                                <th style="text-align: left; padding: 6px 0;">Location</th>
+                                <th style="text-align: right; padding: 6px 0;">Violations</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                <td class="mono" style="color: var(--cyan-primary); padding: 8px 0;">CAM-04</td>
+                                <td>Main Ave &amp; 7th St</td>
+                                <td style="text-align: right; font-weight: bold; color: var(--crit-red);">42</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                <td class="mono" style="color: var(--cyan-primary); padding: 8px 0;">CAM-08</td>
+                                <td>North Junction Flyover</td>
+                                <td style="text-align: right; font-weight: bold; color: var(--warn-orange);">36</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                <td class="mono" style="color: var(--cyan-primary); padding: 8px 0;">CAM-12</td>
+                                <td>5th Ave Metro Intersection</td>
+                                <td style="text-align: right; font-weight: bold;">29</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                <td class="mono" style="color: var(--cyan-primary); padding: 8px 0;">CAM-02</td>
+                                <td>Gandhi Road Central Square</td>
+                                <td style="text-align: right; font-weight: bold;">21</td>
+                            </tr>
+                            <tr>
+                                <td class="mono" style="color: var(--cyan-primary); padding: 8px 0;">CAM-15</td>
+                                <td>Express Highway Ramp A</td>
+                                <td style="text-align: right; font-weight: bold;">9</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Repeat Offender Insights -->
+                <div class="inspector-section" style="padding: 20px;">
+                    <div class="section-label">Habitual Offender Impact Analysis</div>
+                    <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
+                        Vehicles with 2+ prior offenses account for <strong>31%</strong> of all Critical-tier violations, validating the priority multiplier.
+                    </div>
+                    <div class="stat-card purple" style="border: none; padding: 12px; margin-bottom: 10px;">
+                        <div style="font-size: 22px; font-weight: 800; color: #e9d5ff;">TN38AB1234</div>
+                        <div style="font-size: 11px; color: #c084fc;">Top Recidivist: 2 Unpaid Challans | Score 94.2</div>
+                    </div>
+                    <div class="stat-card purple" style="border: none; padding: 12px;">
+                        <div style="font-size: 22px; font-weight: 800; color: #e9d5ff;">TN07XY9876</div>
+                        <div style="font-size: 11px; color: #c084fc;">Top Recidivist: 3 Helmet Offenses | Score 89.7</div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- TAB 4: ARCHITECTURE & SYSTEM DOCUMENTATION -->
+        <section id="panel-architecture" class="view-panel" style="display: none;">
+            <div class="inspector-section" style="padding: 28px; line-height: 1.8;">
+                <h2 style="font-size: 20px; font-weight: 800; margin-bottom: 16px; color: var(--cyan-primary);">
+                    🏛️ End-to-End System Architecture &amp; Methodology
+                </h2>
+
+                <div class="ascii-box" style="background: #0b0f19; padding: 20px; border-radius: 8px; border: 1px solid var(--border-glass); margin-bottom: 24px;">
+<pre style="color: #38bdf8; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+Video / Image Input
+      │
+      ▼
+┌─────────────────┐
+│ Object Detection│ ───► YOLOv8x / Real-Time Bounding Box Predictor
+│ YOLO            │
+└────────┬────────┘
+         │
+ Vehicles / Riders
+         │
+         ▼
+┌─────────────────┐
+│ Object Tracking │ ───► ByteTrack / BoT-SORT Multi-Object Trajectory Tracking
+│ ByteTrack/      │
+│ BoT-SORT        │
+└────────┬────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Violation Engine │
+└────────┬─────────┘
+         │
+ ┌───────┼────────┬────────────────┐
+ ▼       ▼        ▼                ▼
+Helmet  Riders  Direction      Signal Light
+ │       │        │                │
+ └───────┼────────┴────────────────┘
+         ▼
+ Violation Records
+         │
+         ▼
+┌──────────────────┐
+│ Severity Scoring │ ───► Life-Safety Fatality Risk Index (Wrong Way 95, Red Light 88, Helmet 74, Triple 68)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Repeat Detection │ ───► Automated Number Plate Recognition (ANPR) + RTO Registry Lookup
+│ / License Plate  │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Priority Ranking │ ───► Priority = ws·Sev + wc·Conf + wr·Repeat + wq·Quality
+└────────┬─────────┘
+         │
+    TOP 30 CASES  ──────► Constrained Review Capacity Filter
+         │
+         ▼
+┌──────────────────┐
+│ Evidence Report  │ ───► Annotated Frame Canvas + Officer Verification + E-Challan Dispatch
+│ + Dashboard      │
+└──────────────────┘
+</pre>
+                </div>
+
+                <h3 style="font-size: 16px; margin: 20px 0 10px 0; color: #ffffff;">1. Priority Ranking Formulation</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 14px;">
+                    When automated surveillance flags 100+ violations simultaneously, law-enforcement manpower constraints mandate optimal triage. The Priority Score synthesizes 4 key dimensions:
+                </p>
+                <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-glass); padding: 16px; border-radius: 8px; margin-bottom: 18px; font-family: 'JetBrains Mono', monospace;">
+                    <strong>Priority Score = (w<sub>s</sub> × Severity) + (w<sub>c</sub> × Confidence) + (w<sub>r</sub> × RepeatFactor) + (w<sub>q</sub> × Quality)</strong>
+                </div>
+                <ul style="color: var(--text-secondary); margin-left: 20px; margin-bottom: 20px;">
+                    <li><strong>Severity (0 - 100):</strong> Quantifies lethality risk to human road users. Wrong-way travel and high-speed signal running are classified at the highest hazard tiers.</li>
+                    <li><strong>Confidence (0 - 100%):</strong> Minimizes officer verification fatigue by surfacing cases with unequivocal detection confidence.</li>
+                    <li><strong>Repeat Factor (0 - 125):</strong> Escalates chronic violators and vehicles with existing unpaid statutory challans.</li>
+                    <li><strong>Evidence Quality (0 - 100):</strong> Assesses visual frame resolution and license-plate legibility for unambiguous legal enforcement.</li>
+                </ul>
+
+                <h3 style="font-size: 16px; margin: 20px 0 10px 0; color: #ffffff;">2. Human-in-the-Loop Safeguards</h3>
+                <p style="color: var(--text-secondary);">
+                    The system implements strict human review rather than fully automated fine imposition. Reviewing officers verify bounding box integrity, plate OCR match, and potential emergency vehicle exceptions before digital citation signing.
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- EVIDENCE FRAME INSPECTOR MODAL (Requirement 2 & 7) -->
+    <div id="evidenceModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalCaseId">
+        <div class="modal-card">
+            
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span style="font-size: 20px;">🔎</span>
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <h2 id="modalCaseId" class="mono" style="font-size: 18px; font-weight: 800; color: var(--cyan-primary);">CASE_047</h2>
+                            <span id="modalViolationType" class="badge badge-wrong_way">Wrong Way</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">High-Resolution Annotated Evidence Dossier</div>
+                    </div>
+                </div>
+                <button id="modalCloseBtn" class="close-btn" aria-label="Close dialog">&times;</button>
+            </div>
+
+            <!-- Modal Body (Canvas on left, Inspector details on right) -->
+            <div class="modal-body">
+                
+                <!-- Left: Canvas Viewport -->
+                <div class="evidence-viewport">
+                    <!-- Frame Mode Switcher Bar -->
+                    <div class="frame-switcher-bar">
+                        <div class="frame-btn-group">
+                            <button id="btnFramePresent" class="frame-btn active">🔴 Present Frame</button>
+                            <button id="btnFramePrevious" class="frame-btn">⏮ Previous Frame (Archive)</button>
+                            <button id="btnFrameSplit" class="frame-btn">⚏ Side-by-Side Comparison</button>
+                        </div>
+                        <div id="frameTelemetryBadge" class="frame-telemetry-tag">
+                            TIMESTAMP: 2024-05-15 14:32:01 | CAM-04 (PRESENT)
+                        </div>
+                    </div>
+
+                    <!-- Single View Canvas Wrap -->
+                    <div class="evidence-canvas-wrap" id="canvasSingleWrap">
+                        <canvas id="modalEvidenceCanvas"></canvas>
+                    </div>
+
+                    <!-- Side-by-Side Dual Viewport (for repeat offenses) -->
+                    <div class="side-by-side-grid" id="canvasSideBySideWrap" style="display: none; padding: 12px;">
+                        <div class="comparison-pane present">
+                            <div class="comparison-pane-header">
+                                <span>🔴 PRESENT INCIDENT CAPTURE</span>
+                                <span id="comparePresentTime">2024-05-15 14:32:01</span>
+                            </div>
+                            <canvas id="modalComparePresentCanvas"></canvas>
+                        </div>
+                        <div class="comparison-pane previous">
+                            <div class="comparison-pane-header">
+                                <span>⏮ PREVIOUS RECORD ARCHIVE</span>
+                                <span id="comparePreviousTime">2024-02-04 11:20:15 (101d prior)</span>
+                            </div>
+                            <canvas id="modalComparePreviousCanvas"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Canvas Viewport Toolbar -->
+                    <div class="canvas-toolbar">
+                        <div class="canvas-toggle-group">
+                            <button id="toggleBboxes" class="toggle-pill active">Bounding Boxes</button>
+                            <button id="toggleTelemetry" class="toggle-pill active">Telemetry HUD</button>
+                            <button id="togglePlateZoom" class="toggle-pill active">ANPR Plate Zoom</button>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="btnDownloadEvidence" class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;">
+                                💾 Download Evidence Image
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Detailed Inspector Panel -->
+                <div class="inspector-sidebar">
+                    
+                    <!-- Multi-Hazard Violations Detected -->
+                    <div class="inspector-section" id="modalMultiHazardSection">
+                        <div class="section-label">Multi-Hazard Violations Detected</div>
+                        <div id="modalMultiHazardBadges" class="multi-hazard-container">
+                            <!-- Injected dynamically by app.js: e.g. One-Way + No Helmet -->
+                        </div>
+                    </div>
+
+                    <!-- Vehicle & Owner Identification -->
+                    <div class="inspector-section">
+                        <div class="section-label">Vehicle &amp; Owner Profile</div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Registration Plate</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="modalPlate" class="mono" style="font-size: 15px; font-weight: 800; color: #ffffff;">TN38AB1234</span>
+                                <button id="btnModalViewHistory" class="btn btn-outline" style="padding: 2px 7px; font-size: 10px;" title="View Complete Violation History for this Vehicle">
+                                    📜 History
+                                </button>
+                            </div>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Registration Status</span>
+                            <span id="modalRegStatusBadge" class="badge" style="background: rgba(16,185,129,0.2); color: #34d399; font-weight: 700;">🟢 VERIFIED</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">OCR Confidence</span>
+                            <span id="modalOcrConf" class="mono" style="color: var(--cyan-primary); font-weight: 700;">94%</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Proposed Fine</span>
+                            <div style="text-align: right;">
+                                <span id="modalProposedFine" class="mono" style="font-size: 15px; font-weight: 800; color: #f87171;">₹5,000</span>
+                                <div style="font-size: 9px; color: var(--text-muted);">Advisory Statutory Notice (MVA)</div>
+                            </div>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Vehicle Type</span>
+                            <span id="modalVehicleType" style="font-weight: 600;">Sedan Car (Red)</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Registered Owner</span>
+                            <span id="modalOwner" style="font-weight: 600; color: #38bdf8;">V. Ramanathan</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Contact Number</span>
+                            <span id="modalPhone" class="mono">+91 98401 77210</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Location Node</span>
+                            <span id="modalCamera">Zone 4 - Main Ave &amp; 7th St</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Timestamp</span>
+                            <span id="modalTimestamp" class="mono">2024-05-15 14:32:01</span>
+                        </div>
+                        <div class="meta-row">
+                            <span style="color: var(--text-muted);">Recorded Speed</span>
+                            <span id="modalSpeed" class="mono">52 km/h</span>
+                        </div>
+                    </div>
+
+                    <!-- Wise Recidivism Corroboration & Velocity (Requirement 4 & 5) -->
+                    <div class="inspector-section" id="modalCorroborationSection">
+                        <div class="section-label">ANPR Historical Corroboration &amp; Velocity</div>
+                        <div class="corroboration-box">
+                            <div style="font-size: 11px; font-weight: 700; color: #e9d5ff;">🔁 DATABASE REGISTRATION MATCHED</div>
+                            <div class="confidence-flow">
+                                <span style="color: var(--text-muted);">Raw AI Conf: <strong id="modalRawConf">92.5%</strong></span>
+                                <span style="color: var(--success-green);">➔ Corroborated: <strong id="modalCorroboratedConf" style="color: var(--cyan-primary);">96.0%</strong> (+3.5%)</span>
+                            </div>
+                            <div id="modalVelocityText" style="font-size: 11px; color: var(--text-secondary); margin-top: 6px;">
+                                Recurred 101 days after previous offense. Unpaid penalty surcharge active.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Priority & Severity Score Breakdown -->
+                    <div class="inspector-section">
+                        <div class="section-label">Priority Scoring Decomposition</div>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px;">
+                            <span style="font-size: 13px; font-weight: 600;">Overall Priority Score</span>
+                            <span id="modalPriorityScore" class="mono" style="font-size: 26px; font-weight: 800; color: var(--crit-red);">94.2</span>
+                        </div>
+
+                        <div class="score-breakdown-grid" style="grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                            <div class="breakdown-box">
+                                <div id="bdSeverity" class="breakdown-val">+28.5</div>
+                                <div class="breakdown-lbl">Severity (30%)</div>
+                            </div>
+                            <div class="breakdown-box">
+                                <div id="bdRepeat" class="breakdown-val" style="color: var(--purple-repeat);">+15.0</div>
+                                <div class="breakdown-lbl">Recurrence (20%)</div>
+                            </div>
+                            <div class="breakdown-box">
+                                <div id="bdPeriods" class="breakdown-val" style="color: #38bdf8;">+12.0</div>
+                                <div class="breakdown-lbl">Periods (15%)</div>
+                            </div>
+                            <div class="breakdown-box">
+                                <div id="bdFreq" class="breakdown-val" style="color: #a7f3d0;">+11.2</div>
+                                <div class="breakdown-lbl">Frequency (15%)</div>
+                            </div>
+                            <div class="breakdown-box">
+                                <div id="bdRisk" class="breakdown-val" style="color: #fca5a5;">+8.5</div>
+                                <div class="breakdown-lbl">Safety Risk (10%)</div>
+                            </div>
+                            <div class="breakdown-box">
+                                <div id="bdConfidence" class="breakdown-val" style="color: var(--cyan-primary);">+9.2</div>
+                                <div class="breakdown-lbl">Confidence (10%)</div>
+                            </div>
+                        </div>
+
+                        <!-- Period & Frequency Metrics Tag Strip -->
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-glass); border-radius: 6px; padding: 10px; margin-top: 10px; font-size: 11px;">
+                            <div style="font-weight: 700; color: #ffffff; margin-bottom: 4px;">📅 Distinct Period &amp; Frequency Metrics</div>
+                            <div style="display: flex; justify-content: space-between; color: var(--text-secondary);">
+                                <span>Distinct Days: <strong id="modalDistinctDays" style="color: #ffffff;">5</strong></span>
+                                <span>Weeks: <strong id="modalDistinctWeeks" style="color: #ffffff;">4</strong></span>
+                                <span>Months: <strong id="modalDistinctMonths" style="color: #ffffff;">3</strong></span>
+                                <span>Frequency: <strong id="modalFrequency" style="color: #34d399;">0.80 / day</strong></span>
+                            </div>
+                        </div>
+
+                        <!-- Transparent Human-Readable Priority Explanation (Section 66) -->
+                        <div id="modalPriorityExplanationBox" style="margin-top: 10px; font-size: 11px; line-height: 1.5; color: var(--text-secondary); background: rgba(30, 41, 59, 0.5); padding: 10px; border-left: 3px solid var(--cyan-primary); border-radius: 0 4px 4px 0;">
+                            <!-- Injected dynamically by app.js -->
+                        </div>
+                    </div>
+
+                    <!-- Repeat Offense History Timeline (Requirement 4) -->
+                    <div class="inspector-section">
+                        <div class="section-label">Prior Violation Dossier (ANPR Matched)</div>
+                        <div id="modalRepeatList" class="repeat-timeline">
+                            <!-- Injected by app.js -->
+                        </div>
+                    </div>
+
+                    <!-- Human Officer Decision Action Box -->
+                    <div class="officer-action-box">
+                        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); text-transform: uppercase;">
+                            👮 Reviewing Officer Determination
+                        </div>
+                        <div class="action-buttons-row">
+                            <button id="btnConfirmCase" class="btn btn-success" title="Confirm Violation and Generate E-Challan [Press C]">
+                                ✓ Confirm &amp; Enforce
+                            </button>
+                            <button id="btnRejectCase" class="btn btn-danger" title="Reject False Positive [Press R]">
+                                ✕ Reject
+                            </button>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="btnEscalateCase" class="btn btn-secondary" style="flex: 1; font-size: 11px;">
+                                🔍 Escalate / Audit
+                            </button>
+                            <button id="btnViewSurroundingVideo" class="btn btn-outline" style="flex: 1; font-size: 11px;" title="Replay CCTV video around this violation frame">
+                                🎬 Surrounding Video
+                            </button>
+                            <button id="btnPrintChallan" class="btn btn-outline" style="flex: 1; font-size: 11px;">
+                                📜 Print E-Challan
+                            </button>
+                        </div>
+                        <div style="font-size: 10px; color: var(--text-muted); text-align: center;">
+                            Keyboard shortcuts: [C] Confirm &nbsp;•&nbsp; [R] Reject &nbsp;•&nbsp; [Esc] Close
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- VEHICLE HISTORY MODAL (Requirement Phase 29, 30, 36) -->
+    <div id="vehicleHistoryModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="vhModalPlateTitle">
+        <div class="modal-card" style="max-width: 780px;">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span style="font-size: 22px;">📜</span>
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <h2 id="vhModalPlateTitle" class="mono" style="font-size: 18px; font-weight: 800; color: var(--cyan-primary);">TN38AB1234</h2>
+                            <span id="vhModalRegBadge" class="badge" style="background: rgba(16,185,129,0.2); color: #34d399; font-weight: 700;">🟢 VERIFIED REGISTRATION</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Comprehensive Multi-Case Recidivism Record &amp; Vehicle Profile</div>
+                    </div>
+                </div>
+                <button id="btnCloseVehicleHistory" class="close-btn">&times;</button>
+            </div>
+            
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 18px;">
+                <!-- Summary Card -->
+                <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-glass); border-radius: 8px; padding: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px;">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">VEHICLE ID</div>
+                        <div id="vhVehicleId" class="mono" style="font-weight: 800; color: #ffffff; margin-top: 2px;">VEH-00001</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">REGISTERED OWNER</div>
+                        <div id="vhOwnerName" style="font-weight: 700; color: #38bdf8; margin-top: 2px;">V. Ramanathan</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">VEHICLE MAKE / CLASS</div>
+                        <div id="vhVehicleClass" style="font-weight: 600; color: #e2e8f0; margin-top: 2px;">Sedan (Red)</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">DOCUMENTED CASES</div>
+                        <div id="vhTotalCases" class="mono" style="font-size: 16px; font-weight: 800; color: var(--crit-red); margin-top: 2px;">4 Distinct Events</div>
+                    </div>
+                </div>
+
+                <!-- Case List Section -->
+                <div>
+                    <div class="section-label" style="margin-bottom: 8px;">Documented Violation Incidents (Separate Case Records)</div>
+                    <div id="vhCasesList" style="display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; padding-right: 4px;">
+                        <!-- Injected dynamically by app.js -->
+                    </div>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+                    <button id="btnCloseVhFooter" class="btn btn-outline" style="font-size: 12px;">Close Dossier</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SURROUNDING VIDEO / CONTEXT MODAL (Phase 35, 52) -->
+    <div id="surroundingVideoModal" class="modal-overlay" role="dialog" aria-modal="true">
+        <div class="modal-card" style="max-width: 820px;">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span style="font-size: 20px;">🎬</span>
+                    <div>
+                        <h2 id="svModalTitle" class="mono" style="font-size: 16px; font-weight: 800; color: var(--cyan-primary);">Surrounding CCTV Video Window</h2>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Temporal video replay (±5 seconds surrounding violation frame)</div>
+                    </div>
+                </div>
+                <button id="btnCloseSvModal" class="close-btn">&times;</button>
+            </div>
+            <div style="padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+                <div style="background: #000; border-radius: 6px; overflow: hidden; position: relative; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center;">
+                    <canvas id="svVideoCanvas" width="960" height="540" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
+                    <div id="svLiveOverlay" style="position: absolute; top: 12px; left: 16px; background: rgba(0,0,0,0.75); padding: 4px 10px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #38bdf8; border: 1px solid rgba(6,182,212,0.4);">
+                        TEMPORAL WINDOW: FRAME 1380 - 1500 (30 FPS)
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 12px; color: var(--text-secondary);">
+                        Source Video: <strong id="svSourceVideoText" style="color: #ffffff;">traffic_cam_04.mp4</strong>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="btnSvPlayPause" class="btn btn-outline" style="font-size: 11px;">⏯ Play / Pause</button>
+                        <button id="btnSvInspectFrame" class="btn btn-primary" style="font-size: 11px;">🔍 Inspect Violator Frame</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MULTI-HAZARD USER UPLOAD MODAL -->
+    <div id="multiHazardUploadModal" class="modal-overlay" role="dialog" aria-modal="true">
+        <div class="modal-card" style="max-width: 680px;">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span style="font-size: 20px;">🛡️</span>
+                    <div>
+                        <h2 style="font-size: 16px; font-weight: 800;">Multi-Hazard Inspection &amp; Ingestion</h2>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Full spectrum violation analysis across all possibilities</div>
+                    </div>
+                </div>
+                <button id="btnCloseUploadModal" class="close-btn">&times;</button>
+            </div>
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                <div style="display: flex; gap: 16px; align-items: center;">
+                    <img id="uploadPreviewImg" style="width: 160px; height: 100px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-accent);" src="" alt="Upload Preview">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; font-size: 14px;" id="uploadFileName">image.jpg</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                            AI Multi-Possibility Scanner evaluated 4 violation classes on this frame.
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="section-label" style="margin-bottom: 8px;">Possibilities Scanned on Frame</div>
+                    
+                    <label class="scanner-hazard-row detected" style="cursor: pointer;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="chkWrongWay" checked style="accent-color: var(--crit-red); width: 18px; height: 18px;">
+                            <div>
+                                <strong style="color: #f87171;">🚗 One-Way Lane Contravention / Wrong Way</strong>
+                                <div style="font-size: 11px; color: var(--text-muted);">Counter-flow against marked lane flow</div>
+                            </div>
+                        </div>
+                        <span class="mono" style="font-size: 12px; color: var(--crit-red); font-weight: bold;">96.4% CONF</span>
+                    </label>
+
+                    <label class="scanner-hazard-row detected" style="cursor: pointer;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="chkNoHelmet" checked style="accent-color: var(--warn-orange); width: 18px; height: 18px;">
+                            <div>
+                                <strong style="color: #facc15;">🪖 No Safety Helmet (Rider / Two-Wheeler)</strong>
+                                <div style="font-size: 11px; color: var(--text-muted);">Head reticle confirms absence of protective headgear</div>
+                            </div>
+                        </div>
+                        <span class="mono" style="font-size: 12px; color: #facc15; font-weight: bold;">94.8% CONF</span>
+                    </label>
+
+                    <label class="scanner-hazard-row" style="cursor: pointer;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="chkTripleRiding" style="accent-color: var(--purple-repeat); width: 18px; height: 18px;">
+                            <div>
+                                <span>👥 Multiple Riders / Overloading (3+ Persons)</span>
+                                <div style="font-size: 11px; color: var(--text-muted);">Pillion occupancy check</div>
+                            </div>
+                        </div>
+                        <span class="mono" style="font-size: 12px; color: var(--text-muted);">12.0% (Clear)</span>
+                    </label>
+
+                    <label class="scanner-hazard-row" style="cursor: pointer;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="chkRedLight" style="accent-color: var(--crit-red); width: 18px; height: 18px;">
+                            <div>
+                                <span>🚦 Red Signal Encroachment</span>
+                                <div style="font-size: 11px; color: var(--text-muted);">Stop line violation during red phase</div>
+                            </div>
+                        </div>
+                        <span class="mono" style="font-size: 12px; color: var(--text-muted);">8.5% (Clear)</span>
+                    </label>
+                </div>
+
+                <div>
+                    <div class="section-label" style="margin-bottom: 6px;">License Plate &amp; Repeat Offense Matching</div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="uploadPlateInput" value="TN38AB1234" class="search-input mono" style="font-size: 14px; font-weight: bold; width: 220px;" placeholder="e.g. TN38AB1234">
+                        <button id="btnSelectKnownRepeat" class="btn btn-outline" style="font-size: 12px;">Link Known Recidivist (TN38AB1234)</button>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 6px;">
+                        Selecting a registered plate triggers ANPR historical corroboration and past frame comparison.
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px;">
+                    <button id="btnCancelUploadModal" class="btn btn-outline">Cancel</button>
+                    <button id="btnConfirmUploadCase" class="btn btn-primary" style="font-weight: 800;">
+                        ✓ Ingest &amp; Rank in Queue
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FORMULA WEIGHT CONFIGURATOR MODAL -->
+    <div id="formulaModal" class="modal-overlay" role="dialog" aria-modal="true">
+        <div class="modal-card" style="max-width: 600px;">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span style="font-size: 20px;">⚙️</span>
+                    <div>
+                        <h2 style="font-size: 16px; font-weight: 800;">Priority Score Weights Configurator</h2>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Tune Multi-Factor Police Triage Scoring Formula</div>
+                    </div>
+                </div>
+                <button id="btnCloseFormula" class="close-btn">&times;</button>
+            </div>
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 18px;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+                        <span>Severity Weight (w<sub>s</sub>)</span>
+                        <strong class="mono" id="valSevWeight" style="color: var(--cyan-primary);">0.45</strong>
+                    </div>
+                    <input type="range" id="sliderSevWeight" min="0.10" max="0.80" step="0.05" value="0.45" style="width: 100%; accent-color: var(--cyan-primary);">
+                </div>
+
+                <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+                        <span>Confidence Weight (w<sub>c</sub>)</span>
+                        <strong class="mono" id="valConfWeight" style="color: var(--cyan-primary);">0.20</strong>
+                    </div>
+                    <input type="range" id="sliderConfWeight" min="0.05" max="0.50" step="0.05" value="0.20" style="width: 100%; accent-color: var(--cyan-primary);">
+                </div>
+
+                <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+                        <span>Repeat Offense Weight (w<sub>r</sub>)</span>
+                        <strong class="mono" id="valRepWeight" style="color: var(--purple-repeat);">0.25</strong>
+                    </div>
+                    <input type="range" id="sliderRepWeight" min="0.05" max="0.60" step="0.05" value="0.25" style="width: 100%; accent-color: var(--purple-repeat);">
+                </div>
+
+                <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+                        <span>Evidence Quality Weight (w<sub>q</sub>)</span>
+                        <strong class="mono" id="valQualWeight" style="color: var(--success-green);">0.10</strong>
+                    </div>
+                    <input type="range" id="sliderQualWeight" min="0.05" max="0.40" step="0.05" value="0.10" style="width: 100%; accent-color: var(--success-green);">
+                </div>
+
+                <div style="font-size: 11px; color: var(--text-muted); background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 6px;">
+                    Adjusting these weights immediately triggers real-time sorting and dynamically recalculates the Top 30 Officer Review Queue.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastNotification" class="toast-popup" role="status" aria-live="polite"></div>
+
+    <!-- Modular Pipeline Subsystems (Phases 11-47) -->
+    <script src="src/plate_cropper.js"></script>
+    <script src="src/ocr_service.js"></script>
+    <script src="src/registration_verifier.js"></script>
+    <script src="src/vehicle_history.js"></script>
+    <script src="src/fine_engine.js"></script>
+    <script src="src/priority_engine.js"></script>
+    <script src="src/evidence_manager.js"></script>
+    <script src="tests/test_pipeline.js"></script>
+
+    <!-- Application Controller Scripts -->
+    <script src="js/data.js"></script>
+    <script src="js/rankingEngine.js"></script>
+    <script src="js/evidenceCanvas.js"></script>
+    <script src="js/videoSimulator.js"></script>
+    <script src="js/reportGenerator.js"></script>
+    <script src="js/app.js"></script>
+
+</body>
+</html>
